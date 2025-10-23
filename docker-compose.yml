@@ -1,0 +1,125 @@
+# Versão do Docker Compose
+version: '3.8'
+
+# Definição dos nossos serviços (contêineres)
+services:
+  # Serviço do Banco de Dados
+  db:
+    image: mysql:5.7
+    container_name: mysql_db
+    restart: always
+    volumes:
+      # Volume para persistir os dados do banco de Dados
+      - db_data:/var/lib/mysql
+    environment:
+      # Defina senhas seguras aqui
+      MYSQL_ROOT_PASSWORD: <DEFINA_UMA_SENHA_AQUI>
+      MYSQL_DATABASE: wordpress_db
+      MYSQL_USER: wordpress_user
+      MYSQL_PASSWORD: <DEFINA_UMA_SENHA_AQUI>
+    networks:
+      - app-network
+
+  # Serviço do WordPress 1
+  wordpress1:
+    image: wordpress:5.4.2-php7.2-apache
+    container_name: wordpress1
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      # Mapeia a pasta local 'wordpress' para a pasta do container
+      # Este é o segredo para compartilhar os arquivos entre todos os WordPress
+      - ./wordpress:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wordpress_db
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: <DEFINA_UMA_SENHA_AQUI>
+    networks:
+      - app-network
+
+#  # Serviço do WordPress 2 (cópia do 1)
+  wordpress2:
+    image: wordpress:5.4.2-php7.2-apache
+    container_name: wordpress2
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      - ./wordpress:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wordpress_db
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: <DEFINA_UMA_SENHA_AQUI>
+    networks:
+      - app-network
+
+#  # Serviço do WordPress 3 (cópia do 1)
+  wordpress3:
+    image: wordpress:5.4.2-php7.2-apache
+    container_name: wordpress3
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      - ./wordpress:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_NAME: wordpress_db
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: <DEFINA_UMA_SENHA_AQUI>
+    networks:
+      - app-network
+
+  # Serviço do Nginx (Load Balancer)
+  nginx:
+    image: nginx:1.19.0
+    container_name: nginx_lb
+    restart: always
+    ports:
+      # Expõe a porta 80 do Nginx para a porta 80 da sua máquina
+      - "80:80"
+    volumes:
+      # Mapeia nosso arquivo de configuração personalizado
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mapeia a pasta compartilhada do WP, conforme solicitado
+      - ./wordpress:/usr/share/nginx/html:ro
+    depends_on:
+      - wordpress1
+      - wordpress2
+      - wordpress3
+    networks:
+      - app-network
+
+  # --- SERVIÇO DO LOCUST ---
+  locust:
+    image: grubykarol/locust
+    container_name: locust_master
+    ports:
+      # Mapeia a porta da interface web do Locust para a sua máquina
+      - "8089:8089"
+    volumes:
+      # Mapeia o nosso ficheiro de script para dentro do contêiner
+      - ./locustfile.py:/locust/locustfile.py:ro
+    environment:
+      # --- CONFIGURE O SEU TESTE AQUI ---
+      # Define o alvo do teste. O Nginx é o nosso alvo!
+      ATTACKED_HOST: http://nginx
+      # Define o ficheiro de script que o Locust deve usar
+      LOCUST_FILE: /locust/locustfile.py
+      # Define 100 utilizadores (-c 100) e uma taxa de 10 novos/seg (-r 10)
+    networks:
+      - app-network
+    depends_on:
+      - nginx
+
+# Volumes nomeados (gerenciados pelo Docker)
+volumes:
+  db_data:
+
+# Redes (para comunicação entre os contêineres)
+networks:
+  app-network:
+    driver: bridge
